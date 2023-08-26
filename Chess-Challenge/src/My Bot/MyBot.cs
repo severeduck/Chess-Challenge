@@ -140,7 +140,7 @@ public class MyBot : IChessBot
         return Math.Abs(centerX - square.File) + Math.Abs(centerY - square.Rank);
     }
 
-    private int CalculateDynamicDepth(Timer timer)
+    private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
     {
         double estimatedMovesRemaining = (timer.GameStartTimeMilliseconds - timer.MillisecondsElapsedThisTurn) / (double)timer.MillisecondsElapsedThisTurn;
         double averageTimePerMove = timer.MillisecondsRemaining / estimatedMovesRemaining;
