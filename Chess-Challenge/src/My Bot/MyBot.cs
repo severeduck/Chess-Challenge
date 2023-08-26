@@ -114,50 +114,70 @@ public class MyBot : IChessBot
 
         return alpha;
     }
+
     private double EvaluateBoard(Board board)
     {
+        double score = 0;
+
         double pawnValue = 1.0;
         double knightValue = 3.0;
         double bishopValue = 3.0;
         double rookValue = 5.0;
         double queenValue = 9.0;
-        double kingSafetyValue = -20.0; // Penalty for having the king exposed to checks or potential checks.
+        double kingSafetyValue = -20.0;
 
-        double whiteScore = board.GetPieceList(PieceType.Pawn, true).Count * pawnValue
-                            + board.GetPieceList(PieceType.Knight, true).Count * knightValue
-                            + board.GetPieceList(PieceType.Bishop, true).Count * bishopValue
-                            + board.GetPieceList(PieceType.Rook, true).Count * rookValue
-                            + board.GetPieceList(PieceType.Queen, true).Count * queenValue;
+        var whitePawns = board.GetPieceList(PieceType.Pawn, true).ToList();
+        var blackPawns = board.GetPieceList(PieceType.Pawn, false).ToList();
 
-        double blackScore = board.GetPieceList(PieceType.Pawn, false).Count * pawnValue
-                            + board.GetPieceList(PieceType.Knight, false).Count * knightValue
-                            + board.GetPieceList(PieceType.Bishop, false).Count * bishopValue
-                            + board.GetPieceList(PieceType.Rook, false).Count * rookValue
-                            + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
+        // Basic material count
+        score += (whitePawns.Count - blackPawns.Count) * pawnValue;
+        score += (board.GetPieceList(PieceType.Knight, true).Count - board.GetPieceList(PieceType.Knight, false).Count) * knightValue;
+        score += (board.GetPieceList(PieceType.Bishop, true).Count - board.GetPieceList(PieceType.Bishop, false).Count) * bishopValue;
+        score += (board.GetPieceList(PieceType.Rook, true).Count - board.GetPieceList(PieceType.Rook, false).Count) * rookValue;
+        score += (board.GetPieceList(PieceType.Queen, true).Count - board.GetPieceList(PieceType.Queen, false).Count) * queenValue;
 
         // King Safety
         if (board.IsInCheck())
         {
-            whiteScore += board.IsWhiteToMove ? kingSafetyValue : -kingSafetyValue;
+            score += board.IsWhiteToMove ? kingSafetyValue : -kingSafetyValue;
+        }
+
+        // Pawn Structures
+        foreach (var pawn in whitePawns)
+        {
+            if (IsIsolatedPawn(pawn, whitePawns))
+                score -= 0.5;
+            if (IsPassedPawn(pawn, blackPawns))
+                score += 1;
+        }
+        foreach (var pawn in blackPawns)
+        {
+            if (IsIsolatedPawn(pawn, blackPawns))
+                score += 0.5;
+            if (IsPassedPawn(pawn, whitePawns))
+                score -= 1;
         }
 
         // Central Control
         double centralControlValue = 0.5;
-        if (board.IsWhiteToMove)
-        {
-            whiteScore += board.GetPieceList(PieceType.Pawn, true).Count(p => p.Square.File == 'd' || p.Square.File == 'e') * centralControlValue;
-        }
-        else
-        {
-            blackScore += board.GetPieceList(PieceType.Pawn, false).Count(p => p.Square.File == 'd' || p.Square.File == 'e') * centralControlValue;
-        }
+        score += whitePawns.Count(p => p.Square.File == 'd' || p.Square.File == 'e') * centralControlValue;
+        score -= blackPawns.Count(p => p.Square.File == 'd' || p.Square.File == 'e') * centralControlValue;
 
-        double scoreDifference = whiteScore - blackScore;
-
-        // Return the evaluation from the perspective of the current player
-        return board.IsWhiteToMove ? scoreDifference : -scoreDifference;
+        return board.IsWhiteToMove ? score : -score;
     }
 
+    private bool IsIsolatedPawn(Piece pawn, List<Piece> pawnsOfSameColor)
+    {
+        return !pawnsOfSameColor.Any(p => Math.Abs(p.Square.File - pawn.Square.File) == 1 && p.Square.Rank == pawn.Square.Rank);
+    }
+
+    private bool IsPassedPawn(Piece pawn, List<Piece> enemyPawns)
+    {
+        char file = (char)(pawn.Square.File + 'a');
+        int rank = pawn.Square.Rank;
+
+        return !enemyPawns.Any(p => p.Square.Rank > rank && (p.Square.File == file || Math.Abs(p.Square.File - file) == 1));
+    }
     private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
     {
         double estimatedMovesRemaining = (timer.GameStartTimeMilliseconds - timer.MillisecondsElapsedThisTurn) / (double)timer.MillisecondsElapsedThisTurn;
