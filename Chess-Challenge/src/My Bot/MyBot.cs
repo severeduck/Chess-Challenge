@@ -1,5 +1,4 @@
 ﻿using ChessChallenge.API;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -10,19 +9,6 @@ public class MyBot : IChessBot
     private Timer _timer;
 
     // This dictionary will only hold the UCI move strings, as the board will be provided when initializing the Move.
-    private Dictionary<string, string> _openingBook = new Dictionary<string, string>
-    {
-        // King's Pawn Opening
-        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "e2e4" },
-        { "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", "c7c5" }, // Sicilian Defense
-        
-        // Queen's Pawn Opening
-        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "d2d4" },
-        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP2PPP/RNBQKBNR b KQkq d3 0 1", "d7d5" }, // Double Queen's Pawn Opening
-        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP2PPP/RNBQKBNR b KQkq d3 0 1", "g8f6" }, // Indian Game
-
-        // More openings can be added as needed.
-    };
 
     public MyBot()
     {
@@ -32,43 +18,48 @@ public class MyBot : IChessBot
     {
         _timer = timer;
         _maxDepth = CalculateDynamicDepth(timer);
-        
+
         var legalMoves = board.GetLegalMoves().ToList();
-        if (!legalMoves.Any())
+        // if (!legalMoves.Any())
+        // {
+        //     return default; // No legal moves, which means it's either a checkmate or stalemate.
+        // }
+
+        int depth = 1;
+        Move bestMove = legalMoves.First();
+
+        // Iterative deepening
+        while (_timer.MillisecondsRemaining > 100) // Leaving a buffer of 100ms
         {
-            return default; // No legal moves, which means it's either a checkmate or stalemate.
+            bestMove = AlphaBetaSearch(board, legalMoves, depth++);
         }
 
-        // Check if the current board position is in the opening book
-        var currentFen = board.GetFenString();
-        if (_openingBook.ContainsKey(currentFen))
-        {
-            return new Move(_openingBook[currentFen], board);
-        }
-
-        return AlphaBetaSearch(board, legalMoves, _maxDepth);
+        return bestMove;
     }
 
     private Move AlphaBetaSearch(Board board, List<Move> legalMoves, int depth)
     {
-        Move? bestMove = null;
+        Move bestMove = legalMoves.First();
         double alpha = double.NegativeInfinity;
         double beta = double.PositiveInfinity;
+
+        // Simple move ordering: prioritize captures.
+        legalMoves = legalMoves.OrderByDescending(move => move.IsCapture).ToList();
 
         foreach (var move in legalMoves)
         {
             board.MakeMove(move);
             double value = -AlphaBeta(board, depth - 1, -beta, -alpha);
+            board.UndoMove(move);
 
             if (value > alpha)
             {
                 alpha = value;
                 bestMove = move;
             }
-            board.UndoMove(move);
         }
 
-        return bestMove.HasValue ? bestMove.Value : legalMoves.First();
+        return bestMove;
     }
 
     private double AlphaBeta(Board board, int depth, double alpha, double beta)
@@ -118,6 +109,7 @@ public class MyBot : IChessBot
 
     private double EvaluateBoard(Board board)
     {
+        // Basic piece values
         double pawnValue = 1.0;
         double knightValue = 3.0;
         double bishopValue = 3.0;
@@ -125,18 +117,20 @@ public class MyBot : IChessBot
         double queenValue = 9.0;
 
         double whiteScore = board.GetPieceList(PieceType.Pawn, true).Count * pawnValue
-                          + board.GetPieceList(PieceType.Knight, true).Count * knightValue
-                          + board.GetPieceList(PieceType.Bishop, true).Count * bishopValue
-                          + board.GetPieceList(PieceType.Rook, true).Count * rookValue
-                          + board.GetPieceList(PieceType.Queen, true).Count * queenValue;
+                            + board.GetPieceList(PieceType.Knight, true).Count * knightValue
+                            + board.GetPieceList(PieceType.Bishop, true).Count * bishopValue
+                            + board.GetPieceList(PieceType.Rook, true).Count * rookValue
+                            + board.GetPieceList(PieceType.Queen, true).Count * queenValue;
 
         double blackScore = board.GetPieceList(PieceType.Pawn, false).Count * pawnValue
-                          + board.GetPieceList(PieceType.Knight, false).Count * knightValue
-                          + board.GetPieceList(PieceType.Bishop, false).Count * bishopValue
-                          + board.GetPieceList(PieceType.Rook, false).Count * rookValue
-                          + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
+                            + board.GetPieceList(PieceType.Knight, false).Count * knightValue
+                            + board.GetPieceList(PieceType.Bishop, false).Count * bishopValue
+                            + board.GetPieceList(PieceType.Rook, false).Count * rookValue
+                            + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
 
-        return whiteScore - blackScore; 
+        // Add more features to the evaluation such as piece activity, control of the center, etc.
+
+        return whiteScore - blackScore;
     }
 
     private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
@@ -149,6 +143,6 @@ public class MyBot : IChessBot
         else if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.05) // less than 5% of the total time
             return 2;
         else
-            return 3; 
+            return 3;
     }
 }
