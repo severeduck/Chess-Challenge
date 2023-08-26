@@ -7,7 +7,17 @@ public class MyBot : IChessBot
 {
     private const int QUIESCENCE_MAX_DEPTH = 3;
     private Timer _timer;
+    private static readonly Move[][] killerMoves = InitializeKillerMoves();
 
+    private static Move[][] InitializeKillerMoves()
+    {
+        Move[][] killers = new Move[6][];
+        for (int i = 0; i < 6; i++)
+        {
+            killers[i] = new Move[2];
+        }
+        return killers;
+    }
     public Move Think(Board board, Timer timer)
     {
         _timer = timer;
@@ -16,7 +26,7 @@ public class MyBot : IChessBot
         if (!legalMoves.Any())
             return default;
 
-        int depth = CalculateDynamicDepth(timer);
+        int depth = CalculateDynamicDepth(board, timer);
         Move bestMove = legalMoves.First();
 
         double timeForThisMove = _timer.MillisecondsRemaining / 50.0;
@@ -36,14 +46,32 @@ public class MyBot : IChessBot
         double alpha = double.NegativeInfinity;
         double beta = double.PositiveInfinity;
 
+        // Try killer moves first for the given depth
+        foreach (var killer in killerMoves[depth])
+        {
+            if (killer != null && board.GetLegalMoves().Contains(killer))
+            {
+                board.MakeMove(killer);
+                double value = -AlphaBeta(board, depth - 1, -beta, -alpha, killer);
+                board.UndoMove(killer);
+
+                if (value > alpha)
+                {
+                    alpha = value;
+                    bestMove = killer;
+                }
+            }
+        }
+
         legalMoves = legalMoves.OrderByDescending(move => move.IsCapture)
+                               .ThenByDescending(move => MVVLVA(move))
                                .ThenByDescending(move => MoveHistoryScore(move))
                                .ToList();
 
-        foreach (var move in legalMoves)
+        foreach (var move in legalMoves.Where(m => killerMoves[depth] == null || !killerMoves[depth].Contains(m)))
         {
             board.MakeMove(move);
-            double value = -AlphaBeta(board, depth - 1, -beta, -alpha);
+            double value = -AlphaBeta(board, depth - 1, -beta, -alpha, move);
             board.UndoMove(move);
 
             if (value > alpha)
@@ -56,6 +84,29 @@ public class MyBot : IChessBot
         return bestMove;
     }
 
+    // Most Valuable Victim - Least Valuable Attacker
+    private int MVVLVA(Move move)
+    {
+        if (!move.IsCapture) return -1;
+
+        int attackerValue = PieceValue(move.MovePieceType);
+        int victimValue = PieceValue(move.CapturePieceType);
+        return victimValue - attackerValue;
+    }
+
+    private int PieceValue(PieceType pieceType)
+    {
+        switch (pieceType)
+        {
+            case PieceType.Pawn: return 1;
+            case PieceType.Knight: return 3;
+            case PieceType.Bishop: return 3;
+            case PieceType.Rook: return 5;
+            case PieceType.Queen: return 9;
+            default: return 0;
+        }
+    }
+
     private static readonly Dictionary<Move, int> moveHistory = new Dictionary<Move, int>();
 
     private int MoveHistoryScore(Move move)
@@ -63,7 +114,7 @@ public class MyBot : IChessBot
         return moveHistory.TryGetValue(move, out int score) ? score : 0;
     }
 
-    private double AlphaBeta(Board board, int depth, double alpha, double beta)
+    private double AlphaBeta(Board board, int depth, double alpha, double beta, Move currentMove)
     {
         if (depth == 0 || IsTimeRunningOut())
             return QuiescenceSearch(board, alpha, beta, QUIESCENCE_MAX_DEPTH);
@@ -71,12 +122,12 @@ public class MyBot : IChessBot
         foreach (var move in board.GetLegalMoves())
         {
             board.MakeMove(move);
-            double score = -AlphaBeta(board, depth - 1, -beta, -alpha);
+            double score = -AlphaBeta(board, depth - 1, -beta, -alpha, move);
             board.UndoMove(move);
 
             if (score >= beta)
             {
-                moveHistory[move] = moveHistory.GetValueOrDefault(move) + 1;
+                UpdateKillerMove(depth, move);
                 return beta;
             }
 
@@ -85,6 +136,29 @@ public class MyBot : IChessBot
         }
 
         return alpha;
+    }
+
+    private void UpdateKillerMove(int depth, Move move)
+    {
+        // Ensure move is not a capture
+        if (!move.IsCapture)
+        {
+            // Check if killer move for the depth already exists
+            if (killerMoves[depth] == null)
+            {
+                killerMoves[depth] = new Move[2];
+            }
+
+            // If the move isn't already a killer move, add it
+            if (!killerMoves[depth].Contains(move))
+            {
+                // Move current killer move to second slot
+                killerMoves[depth][1] = killerMoves[depth][0];
+
+                // Add new killer move to the first slot
+                killerMoves[depth][0] = move;
+            }
+        }
     }
 
     private double EvaluateBoard(Board board)
@@ -115,7 +189,6 @@ public class MyBot : IChessBot
 
         return board.IsWhiteToMove ? score : -score;
     }
-
     private int GetPieceCount(Board board, bool isWhite)
     {
         int startIndex = isWhite ? 0 : 6;
@@ -140,17 +213,23 @@ public class MyBot : IChessBot
         return Math.Abs(centerX - square.File) + Math.Abs(centerY - square.Rank);
     }
 
-    private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
+    private int CalculateDynamicDepth(Board board, ChessChallenge.API.Timer timer)
     {
         double estimatedMovesRemaining = (timer.GameStartTimeMilliseconds - timer.MillisecondsElapsedThisTurn) / (double)timer.MillisecondsElapsedThisTurn;
         double averageTimePerMove = timer.MillisecondsRemaining / estimatedMovesRemaining;
 
+        int depth = 3;
+
         if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.01)
-            return 1;
+            depth = 1;
         else if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.05)
-            return 2;
-        else
-            return 3;
+            depth = 2;
+
+        // Deepen search in endgame scenarios
+        if (GetPieceCount(board, true) <= 7 && GetPieceCount(board, false) <= 7)
+            depth += 1;
+
+        return depth;
     }
 
     private double QuiescenceSearch(Board board, double alpha, double beta, int depthLeft)
