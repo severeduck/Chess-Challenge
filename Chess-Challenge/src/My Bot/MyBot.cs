@@ -58,12 +58,9 @@ public class MyBot : IChessBot
 
     int EvaluateBoard(Board board)
     {
-        // A simple evaluation function for demonstration.
-        // Here, you would use your own logic to assign a score to the board.
-        // For now, we'll simply count the material difference.
         int value = 0;
 
-        // Assign piece values and sum up
+        // Material Difference (existing logic)
         foreach (var pieceList in board.GetAllPieceLists())
         {
             int pieceValue;
@@ -79,6 +76,12 @@ public class MyBot : IChessBot
 
             value += pieceList.IsWhitePieceList ? pieceValue * pieceList.Count : -pieceValue * pieceList.Count;
         }
+
+        // Mobility: Reward positions where our bot has more legal moves.
+        value += board.GetLegalMoves(true).Length * 10;  // Let's give a weight of 10 for each legal move for the bot.
+        value -= board.GetLegalMoves(false).Length * 10; // Penalize opponent's moves.
+
+        // TODO: Add more evaluation factors like King Safety, Central Control, Pawn Structure etc.
 
         return board.IsWhiteToMove ? value : -value;
     }
