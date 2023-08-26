@@ -4,11 +4,17 @@ using System.Collections.Generic;
 
 public class MyBot : IChessBot
 {
+
     public Move Think(Board board, Timer timer)
     {
         DateTime startTime = DateTime.Now;
         TimeSpan timeForMove = TimeSpan.FromSeconds(2); // Temporary heuristic. Adjust as needed.
         Move bestMove = Move.NullMove;
+
+        var legalMoves = board.GetLegalMoves(false);
+
+        // If no legal moves, return NullMove
+        if (legalMoves.Length == 0) return Move.NullMove;
 
         for (int depth = 1; depth <= 100; depth++) // 100 or whatever max depth you choose
         {
@@ -18,6 +24,11 @@ public class MyBot : IChessBot
             if (currentBestMove != Move.NullMove)
                 bestMove = currentBestMove;
         }
+
+        // If we don't have a best move from the search, pick the first legal move.
+        if (bestMove == Move.NullMove)
+            bestMove = legalMoves[0];
+
         return bestMove;
     }
 
@@ -41,8 +52,14 @@ public class MyBot : IChessBot
                 bestMove = move;
             }
         }
+
+        // If no move was better than the initial alpha, return a NullMove
+        if (alpha == int.MinValue) return Move.NullMove;
+
         return bestMove;
     }
+
+
 
     int AlphaBeta(Board board, int depth, int alpha, int beta)
     {
