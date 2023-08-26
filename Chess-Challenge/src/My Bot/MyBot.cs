@@ -114,14 +114,14 @@ public class MyBot : IChessBot
 
         return alpha;
     }
-
-        private double EvaluateBoard(Board board)
+    private double EvaluateBoard(Board board)
     {
         double pawnValue = 1.0;
         double knightValue = 3.0;
         double bishopValue = 3.0;
         double rookValue = 5.0;
         double queenValue = 9.0;
+        double kingSafetyValue = -20.0; // Penalty for having the king exposed to checks or potential checks.
 
         double whiteScore = board.GetPieceList(PieceType.Pawn, true).Count * pawnValue
                             + board.GetPieceList(PieceType.Knight, true).Count * knightValue
@@ -135,12 +135,28 @@ public class MyBot : IChessBot
                             + board.GetPieceList(PieceType.Rook, false).Count * rookValue
                             + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
 
+        // King Safety
+        if (board.IsInCheck())
+        {
+            whiteScore += board.IsWhiteToMove ? kingSafetyValue : -kingSafetyValue;
+        }
+
+        // Central Control
+        double centralControlValue = 0.5;
+        if (board.IsWhiteToMove)
+        {
+            whiteScore += board.GetPieceList(PieceType.Pawn, true).Count(p => p.Square.File == 'd' || p.Square.File == 'e') * centralControlValue;
+        }
+        else
+        {
+            blackScore += board.GetPieceList(PieceType.Pawn, false).Count(p => p.Square.File == 'd' || p.Square.File == 'e') * centralControlValue;
+        }
+
         double scoreDifference = whiteScore - blackScore;
 
         // Return the evaluation from the perspective of the current player
         return board.IsWhiteToMove ? scoreDifference : -scoreDifference;
     }
-
 
     private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
     {
