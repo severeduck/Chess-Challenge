@@ -19,10 +19,10 @@ public class MyBot : IChessBot
         int depth = CalculateDynamicDepth(timer);
         Move bestMove = legalMoves.First();
 
-        double timeForThisMove = _timer.MillisecondsRemaining / 50.0; // Adjusted from 40 for better endgame performance
+        double timeForThisMove = _timer.MillisecondsRemaining / 50.0;
         DateTime startTime = DateTime.Now;
 
-        while ((DateTime.Now - startTime).TotalMilliseconds < timeForThisMove && depth <= 6)  // Depth limit increased to 6
+        while ((DateTime.Now - startTime).TotalMilliseconds < timeForThisMove && depth <= 6)
         {
             bestMove = AlphaBetaSearch(board, legalMoves, depth++);
         }
@@ -36,7 +36,6 @@ public class MyBot : IChessBot
         double alpha = double.NegativeInfinity;
         double beta = double.PositiveInfinity;
 
-        // Enhanced move ordering: prioritize captures and then move those with the highest history scores (implementing a simple history heuristic)
         legalMoves = legalMoves.OrderByDescending(move => move.IsCapture)
                                .ThenByDescending(move => MoveHistoryScore(move))
                                .ToList();
@@ -57,19 +56,16 @@ public class MyBot : IChessBot
         return bestMove;
     }
 
-    // Implement a simple history heuristic. 
-    // This is a very rudimentary version, where we remember how often a move has contributed to beta cutoffs.
-    private static Dictionary<Move, int> moveHistory = new Dictionary<Move, int>();
+    private static readonly Dictionary<Move, int> moveHistory = new Dictionary<Move, int>();
+
     private int MoveHistoryScore(Move move)
     {
-        if (moveHistory.ContainsKey(move))
-            return moveHistory[move];
-        return 0;
+        return moveHistory.TryGetValue(move, out int score) ? score : 0;
     }
 
     private double AlphaBeta(Board board, int depth, double alpha, double beta)
     {
-        if (depth == 0 || _timer.MillisecondsRemaining <= (_timer.GameStartTimeMilliseconds / 1024.0))
+        if (depth == 0 || IsTimeRunningOut())
             return QuiescenceSearch(board, alpha, beta, QUIESCENCE_MAX_DEPTH);
 
         foreach (var move in board.GetLegalMoves())
@@ -80,11 +76,7 @@ public class MyBot : IChessBot
 
             if (score >= beta)
             {
-                // Record the move that caused the cutoff
-                if (!moveHistory.ContainsKey(move))
-                    moveHistory[move] = 0;
-                moveHistory[move]++;
-
+                moveHistory[move] = moveHistory.GetValueOrDefault(move) + 1;
                 return beta;
             }
 
@@ -97,9 +89,9 @@ public class MyBot : IChessBot
 
     private double EvaluateBoard(Board board)
     {
-        double score = 0;
+        // ... [your existing evaluation code here, if any]
 
-        // ... [your existing evaluation code here]
+        double score = 0;
 
         // Doubled Pawns
         var whitePawns = board.GetPieceList(PieceType.Pawn, true).ToList();
@@ -115,10 +107,10 @@ public class MyBot : IChessBot
         if (GetPieceCount(board, true) <= 7 && GetPieceCount(board, false) <= 7)
         {
             // In the endgame, the king should be more active
-            var whiteKing = board.GetPieceList(PieceType.King, true).First();
-            var blackKing = board.GetPieceList(PieceType.King, false).First();
-            score += 0.3 * (7 - DistanceToCenter(whiteKing.Square));
-            score -= 0.3 * (7 - DistanceToCenter(blackKing.Square));
+            var whiteKing = board.GetPieceList(PieceType.King, true).First().Square;
+            var blackKing = board.GetPieceList(PieceType.King, false).First().Square;
+            score += 0.3 * (7 - DistanceToCenter(whiteKing));
+            score -= 0.3 * (7 - DistanceToCenter(blackKing));
         }
 
         return board.IsWhiteToMove ? score : -score;
@@ -126,8 +118,8 @@ public class MyBot : IChessBot
 
     private int GetPieceCount(Board board, bool isWhite)
     {
-        int startIndex = isWhite ? 0 : 6;  // 0 for white, 6 for black
-        int endIndex = isWhite ? 5 : 11;   // 5 for white, 11 for black
+        int startIndex = isWhite ? 0 : 6;
+        int endIndex = isWhite ? 5 : 11;
 
         int count = 0;
 
@@ -140,35 +132,22 @@ public class MyBot : IChessBot
         return count;
     }
 
-    private double DistanceToCenter(Square square)
+    private int DistanceToCenter(Square square)
     {
-        int dx = Math.Min(Math.Abs(square.File - 'd'), Math.Abs(square.File - 'e'));
-        int dy = Math.Min(Math.Abs(square.Rank - 4), Math.Abs(square.Rank - 5));
+        int centerX = 4;  // e-file, assuming 0-based index
+        int centerY = 4;  // 5th rank, assuming 0-based index
 
-        // Using Euclidean distance for simplicity
-        return Math.Sqrt(dx * dx + dy * dy);
+        return Math.Abs(centerX - square.File) + Math.Abs(centerY - square.Rank);
     }
 
-    private bool IsIsolatedPawn(Piece pawn, List<Piece> pawnsOfSameColor)
-    {
-        return !pawnsOfSameColor.Any(p => Math.Abs(p.Square.File - pawn.Square.File) == 1 && p.Square.Rank == pawn.Square.Rank);
-    }
-
-    private bool IsPassedPawn(Piece pawn, List<Piece> enemyPawns)
-    {
-        char file = (char)(pawn.Square.File + 'a');
-        int rank = pawn.Square.Rank;
-
-        return !enemyPawns.Any(p => p.Square.Rank > rank && (p.Square.File == file || Math.Abs(p.Square.File - file) == 1));
-    }
-    private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
+    private int CalculateDynamicDepth(Timer timer)
     {
         double estimatedMovesRemaining = (timer.GameStartTimeMilliseconds - timer.MillisecondsElapsedThisTurn) / (double)timer.MillisecondsElapsedThisTurn;
         double averageTimePerMove = timer.MillisecondsRemaining / estimatedMovesRemaining;
 
-        if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.01) // less than 1% of the total time
+        if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.01)
             return 1;
-        else if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.05) // less than 5% of the total time
+        else if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.05)
             return 2;
         else
             return 3;
@@ -176,7 +155,7 @@ public class MyBot : IChessBot
 
     private double QuiescenceSearch(Board board, double alpha, double beta, int depthLeft)
     {
-        if (depthLeft == 0 || _timer.MillisecondsRemaining <= (_timer.GameStartTimeMilliseconds / 1024.0))
+        if (depthLeft == 0 || IsTimeRunningOut())
         {
             return EvaluateBoard(board);
         }
@@ -207,5 +186,10 @@ public class MyBot : IChessBot
             }
         }
         return alpha;
+    }
+
+    private bool IsTimeRunningOut()
+    {
+        return _timer.MillisecondsRemaining <= (_timer.GameStartTimeMilliseconds / 1024.0);
     }
 }
