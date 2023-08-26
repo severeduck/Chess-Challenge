@@ -3,10 +3,10 @@ using System;
 
 public class MyBot : IChessBot
 {
+
     public Move Think(Board board, Timer timer)
     {
         int maxDepth = 4;  // or calculate dynamically based on timer
-        Move bestMove = Move.NullMove;
 
         int alpha = int.MinValue;
         int beta = int.MaxValue;
@@ -18,6 +18,8 @@ public class MyBot : IChessBot
         {
             return Move.NullMove;
         }
+
+        Move bestMove = legalMoves[0]; // Initialize with the first legal move.
 
         foreach (var move in legalMoves)
         {
@@ -31,14 +33,9 @@ public class MyBot : IChessBot
             }
         }
 
-        // Check if the best move is in the legal moves list.
-        if (!Array.Exists(legalMoves, m => m.Equals(bestMove)))
-        {
-            throw new Exception("Invalid best move detected!");
-        }
-
         return bestMove;
     }
+
     int AlphaBeta(Board board, int depth, int alpha, int beta)
     {
         if (depth == 0 || board.IsDraw() || board.IsInCheckmate())
