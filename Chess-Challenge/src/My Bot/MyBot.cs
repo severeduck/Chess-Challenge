@@ -9,6 +9,21 @@ public class MyBot : IChessBot
     private int _maxDepth;
     private Timer _timer;
 
+    // This dictionary will only hold the UCI move strings, as the board will be provided when initializing the Move.
+    private Dictionary<string, string> _openingBook = new Dictionary<string, string>
+    {
+        // King's Pawn Opening
+        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "e2e4" },
+        { "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", "c7c5" }, // Sicilian Defense
+        
+        // Queen's Pawn Opening
+        { "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "d2d4" },
+        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP2PPP/RNBQKBNR b KQkq d3 0 1", "d7d5" }, // Double Queen's Pawn Opening
+        { "rnbqkbnr/pppppppp/8/8/3P4/8/PPP2PPP/RNBQKBNR b KQkq d3 0 1", "g8f6" }, // Indian Game
+
+        // More openings can be added as needed.
+    };
+
     public MyBot()
     {
     }
@@ -22,6 +37,13 @@ public class MyBot : IChessBot
         if (!legalMoves.Any())
         {
             return default; // No legal moves, which means it's either a checkmate or stalemate.
+        }
+
+        // Check if the current board position is in the opening book
+        var currentFen = board.GetFenString();
+        if (_openingBook.ContainsKey(currentFen))
+        {
+            return new Move(_openingBook[currentFen], board);
         }
 
         return AlphaBetaSearch(board, legalMoves, _maxDepth);
