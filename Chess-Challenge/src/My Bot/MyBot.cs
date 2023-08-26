@@ -20,10 +20,10 @@ public class MyBot : IChessBot
         _maxDepth = CalculateDynamicDepth(timer);
 
         var legalMoves = board.GetLegalMoves().ToList();
-        // if (!legalMoves.Any())
-        // {
-        //     return default; // No legal moves, which means it's either a checkmate or stalemate.
-        // }
+        if (!legalMoves.Any())
+        {
+            return default; // No legal moves, which means it's either a checkmate or stalemate.
+        }
 
         int depth = 1;
         Move bestMove = legalMoves.First();
@@ -107,31 +107,33 @@ public class MyBot : IChessBot
         return alpha;
     }
 
-    private double EvaluateBoard(Board board)
-    {
-        // Basic piece values
-        double pawnValue = 1.0;
-        double knightValue = 3.0;
-        double bishopValue = 3.0;
-        double rookValue = 5.0;
-        double queenValue = 9.0;
+private double EvaluateBoard(Board board)
+{
+    // Basic piece values
+    double pawnValue = 1.0;
+    double knightValue = 3.0;
+    double bishopValue = 3.0;
+    double rookValue = 5.0;
+    double queenValue = 9.0;
 
-        double whiteScore = board.GetPieceList(PieceType.Pawn, true).Count * pawnValue
-                            + board.GetPieceList(PieceType.Knight, true).Count * knightValue
-                            + board.GetPieceList(PieceType.Bishop, true).Count * bishopValue
-                            + board.GetPieceList(PieceType.Rook, true).Count * rookValue
-                            + board.GetPieceList(PieceType.Queen, true).Count * queenValue;
+    double whiteScore = board.GetPieceList(PieceType.Pawn, true).Count * pawnValue
+                        + board.GetPieceList(PieceType.Knight, true).Count * knightValue
+                        + board.GetPieceList(PieceType.Bishop, true).Count * bishopValue
+                        + board.GetPieceList(PieceType.Rook, true).Count * rookValue
+                        + board.GetPieceList(PieceType.Queen, true).Count * queenValue;
 
-        double blackScore = board.GetPieceList(PieceType.Pawn, false).Count * pawnValue
-                            + board.GetPieceList(PieceType.Knight, false).Count * knightValue
-                            + board.GetPieceList(PieceType.Bishop, false).Count * bishopValue
-                            + board.GetPieceList(PieceType.Rook, false).Count * rookValue
-                            + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
+    double blackScore = board.GetPieceList(PieceType.Pawn, false).Count * pawnValue
+                        + board.GetPieceList(PieceType.Knight, false).Count * knightValue
+                        + board.GetPieceList(PieceType.Bishop, false).Count * bishopValue
+                        + board.GetPieceList(PieceType.Rook, false).Count * rookValue
+                        + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
 
-        // Add more features to the evaluation such as piece activity, control of the center, etc.
+    double scoreDifference = whiteScore - blackScore;
 
-        return whiteScore - blackScore;
-    }
+    // Return the evaluation from the perspective of the current player
+    return board.IsWhiteToMove ? scoreDifference : -scoreDifference;
+}
+
 
     private int CalculateDynamicDepth(ChessChallenge.API.Timer timer)
     {
