@@ -6,25 +6,22 @@ using System.Linq;
 public class MyBot : IChessBot
 {
     private const int QUIESCENCE_MAX_DEPTH = 3;
+    private const int MAX_SEARCH_DEPTH = 6;
+    private const int TIME_DIVISOR = 1024;
+    private const double TIME_FRACTION = 1.0 / TIME_DIVISOR;
     private Timer _timer;
     private static readonly Move[][] killerMoves = InitializeKillerMoves();
 
     private static Move[][] InitializeKillerMoves()
     {
-        Move[][] killers = new Move[6][];
-        for (int i = 0; i < 6; i++)
-        {
-            killers[i] = new Move[2];
-        }
-        return killers;
+        return new Move[6][].Select(m => new Move[2]).ToArray();
     }
     public Move Think(Board board, Timer timer)
     {
         _timer = timer;
         var legalMoves = board.GetLegalMoves().ToList();
 
-        if (!legalMoves.Any())
-            return default;
+        if (!legalMoves.Any()) return default;
 
         int depth = CalculateDynamicDepth(board, timer);
         Move bestMove = legalMoves.First();
@@ -32,7 +29,7 @@ public class MyBot : IChessBot
         double timeForThisMove = _timer.MillisecondsRemaining / 50.0;
         DateTime startTime = DateTime.Now;
 
-        while ((DateTime.Now - startTime).TotalMilliseconds < timeForThisMove && depth <= 6)
+        while ((DateTime.Now - startTime).TotalMilliseconds < timeForThisMove && depth <= MAX_SEARCH_DEPTH)
         {
             bestMove = AlphaBetaSearch(board, legalMoves, depth++);
         }
@@ -46,19 +43,22 @@ public class MyBot : IChessBot
         double alpha = double.NegativeInfinity;
         double beta = double.PositiveInfinity;
 
-        // Try killer moves first for the given depth
-        foreach (var killer in killerMoves[depth])
+        if (depth < 6)
         {
-            if (killer != null && board.GetLegalMoves().Contains(killer))
+            // Try killer moves first for the given depth
+            foreach (var killer in killerMoves[depth])
             {
-                board.MakeMove(killer);
-                double value = -AlphaBeta(board, depth - 1, -beta, -alpha, killer);
-                board.UndoMove(killer);
-
-                if (value > alpha)
+                if (killer != null && board.GetLegalMoves().Contains(killer))
                 {
-                    alpha = value;
-                    bestMove = killer;
+                    board.MakeMove(killer);
+                    double value = -AlphaBeta(board, depth - 1, -beta, -alpha, killer);
+                    board.UndoMove(killer);
+
+                    if (value > alpha)
+                    {
+                        alpha = value;
+                        bestMove = killer;
+                    }
                 }
             }
         }
@@ -68,7 +68,7 @@ public class MyBot : IChessBot
                                .ThenByDescending(move => MoveHistoryScore(move))
                                .ToList();
 
-        foreach (var move in legalMoves.Where(m => killerMoves[depth] == null || !killerMoves[depth].Contains(m)))
+        foreach (var move in legalMoves.Where(m => depth >= 6 || killerMoves[depth] == null || !killerMoves[depth].Contains(m)))
         {
             board.MakeMove(move);
             double value = -AlphaBeta(board, depth - 1, -beta, -alpha, move);
@@ -84,11 +84,11 @@ public class MyBot : IChessBot
         return bestMove;
     }
 
+
     // Most Valuable Victim - Least Valuable Attacker
     private int MVVLVA(Move move)
     {
         if (!move.IsCapture) return -1;
-
         int attackerValue = PieceValue(move.MovePieceType);
         int victimValue = PieceValue(move.CapturePieceType);
         return victimValue - attackerValue;
@@ -96,15 +96,15 @@ public class MyBot : IChessBot
 
     private int PieceValue(PieceType pieceType)
     {
-        switch (pieceType)
+        return pieceType switch
         {
-            case PieceType.Pawn: return 1;
-            case PieceType.Knight: return 3;
-            case PieceType.Bishop: return 3;
-            case PieceType.Rook: return 5;
-            case PieceType.Queen: return 9;
-            default: return 0;
-        }
+            PieceType.Pawn => 1,
+            PieceType.Knight => 3,
+            PieceType.Bishop => 3,
+            PieceType.Rook => 5,
+            PieceType.Queen => 9,
+            _ => 0
+        };
     }
 
     private static readonly Dictionary<Move, int> moveHistory = new Dictionary<Move, int>();
@@ -269,6 +269,6 @@ public class MyBot : IChessBot
 
     private bool IsTimeRunningOut()
     {
-        return _timer.MillisecondsRemaining <= (_timer.GameStartTimeMilliseconds / 1024.0);
+        return _timer.MillisecondsRemaining * TIME_FRACTION <= _timer.GameStartTimeMilliseconds;
     }
 }
