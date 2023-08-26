@@ -1,26 +1,35 @@
 ﻿using ChessChallenge.API;
 using System;
+using System.Collections.Generic;
 
 public class MyBot : IChessBot
 {
-
     public Move Think(Board board, Timer timer)
     {
-        int maxDepth = 4;  // or calculate dynamically based on timer
+        DateTime startTime = DateTime.Now;
+        TimeSpan timeForMove = TimeSpan.FromSeconds(2); // Temporary heuristic. Adjust as needed.
+        Move bestMove = Move.NullMove;
+
+        for (int depth = 1; depth <= 100; depth++) // 100 or whatever max depth you choose
+        {
+            Move currentBestMove = DepthLimitedSearch(board, depth);
+            if (DateTime.Now - startTime > timeForMove)
+                break;
+            if (currentBestMove != Move.NullMove)
+                bestMove = currentBestMove;
+        }
+        return bestMove;
+    }
+
+    public Move DepthLimitedSearch(Board board, int depth)
+    {
+        int maxDepth = depth;
+        Move bestMove = Move.NullMove;
 
         int alpha = int.MinValue;
         int beta = int.MaxValue;
 
         var legalMoves = board.GetLegalMoves(false);
-
-        // If there are no legal moves, just return the null move.
-        if (legalMoves.Length == 0)
-        {
-            return Move.NullMove;
-        }
-
-        Move bestMove = legalMoves[0]; // Initialize with the first legal move.
-
         foreach (var move in legalMoves)
         {
             board.MakeMove(move);
@@ -32,13 +41,15 @@ public class MyBot : IChessBot
                 bestMove = move;
             }
         }
-
         return bestMove;
     }
 
     int AlphaBeta(Board board, int depth, int alpha, int beta)
     {
-        if (depth == 0 || board.IsDraw() || board.IsInCheckmate())
+        if (depth == 0)
+            return QuiescenceSearch(board, alpha, beta);
+
+        if (board.IsDraw() || board.IsInCheckmate())
             return EvaluateBoard(board);
 
         var legalMoves = board.GetLegalMoves(false);
@@ -56,11 +67,33 @@ public class MyBot : IChessBot
         return alpha;
     }
 
+    int QuiescenceSearch(Board board, int alpha, int beta)
+    {
+        int standPat = EvaluateBoard(board);
+        if (standPat >= beta)
+            return beta;
+        if (alpha < standPat)
+            alpha = standPat;
+
+        var captureMoves = board.GetLegalMoves(false); // Assuming this returns only capturing moves
+
+        foreach (var move in captureMoves)
+        {
+            board.MakeMove(move);
+            int score = -QuiescenceSearch(board, -beta, -alpha);
+            board.UndoMove(move);
+
+            if (score >= beta)
+                return beta;
+            if (score > alpha)
+                alpha = score;
+        }
+        return alpha;
+    }
+
     int EvaluateBoard(Board board)
     {
         int value = 0;
-
-        // Material Difference (existing logic)
         foreach (var pieceList in board.GetAllPieceLists())
         {
             int pieceValue;
@@ -76,13 +109,6 @@ public class MyBot : IChessBot
 
             value += pieceList.IsWhitePieceList ? pieceValue * pieceList.Count : -pieceValue * pieceList.Count;
         }
-
-        // Mobility: Reward positions where our bot has more legal moves.
-        value += board.GetLegalMoves(true).Length * 10;  // Let's give a weight of 10 for each legal move for the bot.
-        value -= board.GetLegalMoves(false).Length * 10; // Penalize opponent's moves.
-
-        // TODO: Add more evaluation factors like King Safety, Central Control, Pawn Structure etc.
-
         return board.IsWhiteToMove ? value : -value;
     }
 }
