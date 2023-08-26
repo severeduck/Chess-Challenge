@@ -31,24 +31,23 @@ public class MyBot : IChessBot
 
         while ((DateTime.Now - startTime).TotalMilliseconds < timeForThisMove && depth <= MAX_SEARCH_DEPTH)
         {
-            bestMove = AlphaBetaSearch(board, legalMoves, depth++);
+            bestMove = AlphaBetaSearch(board, legalMoves, depth, double.NegativeInfinity, double.PositiveInfinity);
+            depth++;
         }
 
         return bestMove;
     }
 
-    private Move AlphaBetaSearch(Board board, List<Move> legalMoves, int depth)
+    private Move AlphaBetaSearch(Board board, List<Move> legalMoves, int depth, double alpha, double beta)
     {
         Move bestMove = legalMoves.First();
-        double alpha = double.NegativeInfinity;
-        double beta = double.PositiveInfinity;
 
         if (depth < 6)
         {
             // Try killer moves first for the given depth
             foreach (var killer in killerMoves[depth])
             {
-                if (killer != null && board.GetLegalMoves().Contains(killer))
+                if (board.GetLegalMoves().Contains(killer))
                 {
                     board.MakeMove(killer);
                     double value = -AlphaBeta(board, depth - 1, -beta, -alpha, killer);
@@ -114,7 +113,7 @@ public class MyBot : IChessBot
         return moveHistory.TryGetValue(move, out int score) ? score : 0;
     }
 
-    private double AlphaBeta(Board board, int depth, double alpha, double beta, Move currentMove)
+private double AlphaBeta(Board board, int depth, double alpha, double beta, Move currentMove)
     {
         if (depth == 0 || IsTimeRunningOut())
             return QuiescenceSearch(board, alpha, beta, QUIESCENCE_MAX_DEPTH);
@@ -130,9 +129,7 @@ public class MyBot : IChessBot
                 UpdateKillerMove(depth, move);
                 return beta;
             }
-
-            if (score > alpha)
-                alpha = score;
+            alpha = Math.Max(alpha, score);
         }
 
         return alpha;
@@ -269,6 +266,6 @@ public class MyBot : IChessBot
 
     private bool IsTimeRunningOut()
     {
-        return _timer.MillisecondsRemaining * TIME_FRACTION <= _timer.GameStartTimeMilliseconds;
+        return _timer.MillisecondsRemaining * (1.0 / TIME_DIVISOR) <= _timer.GameStartTimeMilliseconds;
     }
 }
