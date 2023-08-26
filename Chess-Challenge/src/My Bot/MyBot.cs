@@ -1,21 +1,23 @@
 ﻿using ChessChallenge.API;
 using System;
+using System.Linq;
 
 public class MyBot : IChessBot
 {
     private const int QUIESCENCE_MAX_DEPTH = 2;
+    private const int REGULAR_SEARCH_CUTOFF = 5000; // 5 seconds in milliseconds
+    private const int QUIESCENCE_SEARCH_CUTOFF = 3000; // 3 seconds in milliseconds
     private int _maxDepth;
     private Timer _timer;
 
     public MyBot()
     {
-        // Constructor remains empty for now since we removed the opening book initialization.
     }
 
     public Move Think(Board board, Timer timer)
     {
         _timer = timer;
-        _maxDepth = CalculateDynamicDepth(timer);
+        _maxDepth = CalculateDynamicDepth(board, timer);
         return AlphaBetaSearch(board, _maxDepth);
     }
 
@@ -28,23 +30,25 @@ public class MyBot : IChessBot
         foreach (var move in board.GetLegalMoves())
         {
             board.MakeMove(move);
-
             double value = -AlphaBeta(board, depth - 1, -beta, -alpha);
+
             if (value > alpha)
             {
                 alpha = value;
                 bestMove = move;
             }
-
             board.UndoMove(move);
         }
+
+        if (!bestMove.HasValue)
+            throw new Exception("No legal moves available.");
 
         return bestMove.Value;
     }
 
     private double AlphaBeta(Board board, int depth, double alpha, double beta)
     {
-        if (depth == 0 || _timer.MillisecondsRemaining < 10000)
+        if (depth == 0 || _timer.MillisecondsRemaining < REGULAR_SEARCH_CUTOFF)
             return QuiescenceSearch(board, alpha, beta, QUIESCENCE_MAX_DEPTH);
 
         foreach (var move in board.GetLegalMoves())
@@ -65,7 +69,7 @@ public class MyBot : IChessBot
 
     private double QuiescenceSearch(Board board, double alpha, double beta, int depth)
     {
-        if (depth == 0 || _timer.MillisecondsRemaining < 10000)
+        if (depth == 0 || _timer.MillisecondsRemaining < QUIESCENCE_SEARCH_CUTOFF)
             return EvaluateBoard(board);
 
         foreach (var move in board.GetLegalMoves())
@@ -89,16 +93,40 @@ public class MyBot : IChessBot
 
     private double EvaluateBoard(Board board)
     {
-        // Placeholder evaluation function
-        // return board.MaterialDifference;
-        return 0;
+        double pawnValue = 1.0;
+        double knightValue = 3.0;
+        double bishopValue = 3.0;
+        double rookValue = 5.0;
+        double queenValue = 9.0;
+
+        double whiteScore = board.GetPieceList(PieceType.Pawn, true).Count * pawnValue
+                          + board.GetPieceList(PieceType.Knight, true).Count * knightValue
+                          + board.GetPieceList(PieceType.Bishop, true).Count * bishopValue
+                          + board.GetPieceList(PieceType.Rook, true).Count * rookValue
+                          + board.GetPieceList(PieceType.Queen, true).Count * queenValue;
+
+        double blackScore = board.GetPieceList(PieceType.Pawn, false).Count * pawnValue
+                          + board.GetPieceList(PieceType.Knight, false).Count * knightValue
+                          + board.GetPieceList(PieceType.Bishop, false).Count * bishopValue
+                          + board.GetPieceList(PieceType.Rook, false).Count * rookValue
+                          + board.GetPieceList(PieceType.Queen, false).Count * queenValue;
+
+        return whiteScore - blackScore; // Assuming positive is better for white.
     }
 
-    private int CalculateDynamicDepth(Timer timer)
+    private int CalculateDynamicDepth(Board board, Timer timer)
     {
-        // double timePerMove = timer.RemainingTime.TotalSeconds / timer.TotalMoves;
-        // if (timePerMove < 1) return 1;
-        // if (timePerMove < 5) return 2;
-        return 3; // Adjust this as needed.
+        double movesPlayed = board.PlyCount / 2.0; // Convert ply to full moves
+        double movesRemaining = 40 - movesPlayed; // Assuming a typical 40-move game for simplicity
+        if (movesRemaining <= 0) movesRemaining = 1; // To avoid division by zero
+        
+        double averageTimePerMove = timer.MillisecondsRemaining / movesRemaining;
+
+        if (averageTimePerMove < 1000)
+            return 1;
+        else if (averageTimePerMove < 5000)
+            return 2;
+        else
+            return 3; 
     }
 }
