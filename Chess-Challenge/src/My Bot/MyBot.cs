@@ -1,169 +1,104 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using ChessChallenge.API;
+﻿using ChessChallenge.API;
+using System;
 
 public class MyBot : IChessBot
 {
-    private const int CheckmateScore = 100000;
-    private readonly OpeningBook _openingBook;
-    private Dictionary<string, int> _evaluatedPositions;
+    private const int QUIESCENCE_MAX_DEPTH = 2;
+    private int _maxDepth;
+    private Timer _timer;
 
     public MyBot()
     {
-        _openingBook = new OpeningBook();
-        _evaluatedPositions = new Dictionary<string, int>();
+        // Constructor remains empty for now since we removed the opening book initialization.
     }
 
     public Move Think(Board board, Timer timer)
     {
-        _evaluatedPositions.Clear();
-        var bestMove = MinimaxRoot(board, CalculateDynamicDepth(board));
-        return bestMove;
+        _timer = timer;
+        _maxDepth = CalculateDynamicDepth(timer);
+        return AlphaBetaSearch(board, _maxDepth);
     }
 
-    private int CalculateDynamicDepth(Board board)
+    private Move AlphaBetaSearch(Board board, int depth)
     {
-        // A very simple logic to increase depth as the game progresses. 
-        // This can be expanded or replaced with a more robust approach.
-        int totalPieces = board.WhitePieces.Count() + board.BlackPieces.Count();
-        return totalPieces > 25 ? 3 : 4; // Adjust values as per testing
-    }
+        Move? bestMove = null;
+        double alpha = double.NegativeInfinity;
+        double beta = double.PositiveInfinity;
 
-    private Move MinimaxRoot(Board board, int depth)
-    {
-        var validMoves = board.GetValidMovesForCurrentPlayer();
-        int bestMoveScore = int.MinValue;
-        Move bestMove = validMoves.First();
-
-        foreach (var move in validMoves)
+        foreach (var move in board.GetLegalMoves())
         {
             board.MakeMove(move);
-            var boardValue = -AlphaBeta(board, depth - 1, int.MinValue, int.MaxValue);
-            board.UndoLastMove();
 
-            if (boardValue > bestMoveScore)
+            double value = -AlphaBeta(board, depth - 1, -beta, -alpha);
+            if (value > alpha)
             {
-                bestMoveScore = boardValue;
+                alpha = value;
                 bestMove = move;
             }
+
+            board.UndoMove(move);
         }
-        return bestMove;
+
+        return bestMove.Value;
     }
 
-    private int AlphaBeta(Board board, int depth, int alpha, int beta)
+    private double AlphaBeta(Board board, int depth, double alpha, double beta)
     {
-        if (depth == 0)
-            return QuiescenceSearch(board, alpha, beta, depth);
+        if (depth == 0 || _timer.MillisecondsRemaining < 10000)
+            return QuiescenceSearch(board, alpha, beta, QUIESCENCE_MAX_DEPTH);
 
-        var validMoves = board.GetValidMovesForCurrentPlayer();
-
-        if (!validMoves.Any())
-        {
-            return board.CurrentPlayer == board.WhitePlayer ? -CheckmateScore : CheckmateScore;
-        }
-
-        foreach (var move in validMoves)
+        foreach (var move in board.GetLegalMoves())
         {
             board.MakeMove(move);
-            int boardValue = -AlphaBeta(board, depth - 1, -beta, -alpha);
-            board.UndoLastMove();
-
-            if (boardValue >= beta)
-                return beta;
-            if (boardValue > alpha)
-                alpha = boardValue;
-        }
-
-        return alpha;
-    }
-
-    private int QuiescenceSearch(Board board, int alpha, int beta, int depth)
-    {
-        int standPat = EvaluateBoard(board);
-        if (standPat >= beta)
-            return beta;
-        if (alpha < standPat)
-            alpha = standPat;
-
-        var moves = board.GetValidMovesForCurrentPlayer().Where(move => move.IsCapture);
-
-        foreach (var move in moves)
-        {
-            board.MakeMove(move);
-            int score = -QuiescenceSearch(board, -beta, -alpha, depth + 1);
-            board.UndoLastMove();
+            double score = -AlphaBeta(board, depth - 1, -beta, -alpha);
+            board.UndoMove(move);
 
             if (score >= beta)
                 return beta;
+
             if (score > alpha)
                 alpha = score;
         }
+
         return alpha;
     }
 
-    private int EvaluateBoard(Board board)
+    private double QuiescenceSearch(Board board, double alpha, double beta, int depth)
     {
-        string fen = board.GetFen();
-        if (_evaluatedPositions.ContainsKey(fen))
-        {
-            return _evaluatedPositions[fen];
-        }
+        if (depth == 0 || _timer.MillisecondsRemaining < 10000)
+            return EvaluateBoard(board);
 
-        int evaluation = 0;
-
-        if (_openingBook.ContainsPosition(fen))
+        foreach (var move in board.GetLegalMoves())
         {
-            evaluation = _openingBook.GetEvaluation(fen);
-        }
-        else
-        {
-            foreach (var piece in board.WhitePieces)
+            if (move.IsCapture)
             {
-                evaluation += GetPieceValue(piece);
-            }
+                board.MakeMove(move);
+                double score = -QuiescenceSearch(board, -beta, -alpha, depth - 1);
+                board.UndoMove(move);
 
-            foreach (var piece in board.BlackPieces)
-            {
-                evaluation -= GetPieceValue(piece);
+                if (score >= beta)
+                    return beta;
+
+                if (score > alpha)
+                    alpha = score;
             }
         }
 
-        _evaluatedPositions[fen] = evaluation;
-        return evaluation;
+        return alpha;
     }
 
-    private int GetPieceValue(Piece piece)
+    private double EvaluateBoard(Board board)
     {
-        // Values can be adjusted based on preference
-        return piece.Type switch
-        {
-            PieceType.Pawn => 10,
-            PieceType.Knight => 30,
-            PieceType.Bishop => 30,
-            PieceType.Rook => 50,
-            PieceType.Queen => 90,
-            PieceType.King => 900,
-            _ => 0,
-        };
-    }
-}
-
-public class OpeningBook
-{
-    // Dummy example
-    private Dictionary<string, int> _openings = new Dictionary<string, int>
-    {
-        // ["example_fen"] = evaluation
-    };
-
-    public bool ContainsPosition(string fen)
-    {
-        return _openings.ContainsKey(fen);
+        // Placeholder evaluation function
+        // return board.MaterialDifference;
+        return 0;
     }
 
-    public int GetEvaluation(string fen)
+    private int CalculateDynamicDepth(Timer timer)
     {
-        return _openings.TryGetValue(fen, out int value) ? value : 0;
+        // double timePerMove = timer.RemainingTime.TotalSeconds / timer.TotalMoves;
+        // if (timePerMove < 1) return 1;
+        // if (timePerMove < 5) return 2;
+        return 3; // Adjust this as needed.
     }
 }
