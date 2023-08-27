@@ -11,6 +11,7 @@ public class MyBot : IChessBot
     private const double TIME_FRACTION = 1.0 / TIME_DIVISOR;
     private Timer _timer;
     private static readonly Move[][] killerMoves = InitializeKillerMoves();
+    private const double PANIC_TIME_FRACTION = 0.33;  // Once only 33% of the original time remains, enter panic mode
 
     private static Move[][] InitializeKillerMoves()
     {
@@ -26,7 +27,9 @@ public class MyBot : IChessBot
         int depth = CalculateDynamicDepth(board, timer);
         Move bestMove = legalMoves.First();
 
-        double timeForThisMove = _timer.MillisecondsRemaining / 50.0;
+        // If we're not in panic mode, think for 80% of the remaining time.
+        // If we're in panic mode, only think for 5% of the remaining time.
+        double timeForThisMove = IsInPanicMode() ? _timer.MillisecondsRemaining * 0.05 : _timer.MillisecondsRemaining * 0.8;
         DateTime startTime = DateTime.Now;
 
         while ((DateTime.Now - startTime).TotalMilliseconds < timeForThisMove && depth <= MAX_SEARCH_DEPTH)
@@ -113,7 +116,7 @@ public class MyBot : IChessBot
         return moveHistory.TryGetValue(move, out int score) ? score : 0;
     }
 
-private double AlphaBeta(Board board, int depth, double alpha, double beta, Move currentMove)
+    private double AlphaBeta(Board board, int depth, double alpha, double beta, Move currentMove)
     {
         if (depth == 0 || IsTimeRunningOut())
             return QuiescenceSearch(board, alpha, beta, QUIESCENCE_MAX_DEPTH);
@@ -215,16 +218,16 @@ private double AlphaBeta(Board board, int depth, double alpha, double beta, Move
         double estimatedMovesRemaining = (timer.GameStartTimeMilliseconds - timer.MillisecondsElapsedThisTurn) / (double)timer.MillisecondsElapsedThisTurn;
         double averageTimePerMove = timer.MillisecondsRemaining / estimatedMovesRemaining;
 
-        int depth = 3;
+        int depth = 4;  // Starting depth increased
 
         if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.01)
-            depth = 1;
-        else if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.05)
             depth = 2;
+        else if (averageTimePerMove < timer.GameStartTimeMilliseconds * 0.05)
+            depth = 3;
 
         // Deepen search in endgame scenarios
         if (GetPieceCount(board, true) <= 7 && GetPieceCount(board, false) <= 7)
-            depth += 1;
+            depth += 2; // More aggressive in the endgame
 
         return depth;
     }
@@ -266,6 +269,15 @@ private double AlphaBeta(Board board, int depth, double alpha, double beta, Move
 
     private bool IsTimeRunningOut()
     {
-        return _timer.MillisecondsRemaining * (1.0 / TIME_DIVISOR) <= _timer.GameStartTimeMilliseconds;
+        // This makes the bot think until almost the last moment. 
+        // The constant value can be adjusted based on how close to the edge you want to play it.
+        return IsInPanicMode() ? _timer.MillisecondsRemaining <= 50 : _timer.MillisecondsRemaining <= 100;
     }
+
+    private bool IsInPanicMode()
+    {
+        // If only 10% (or less) of the initial time remains, then we're in panic mode
+        return _timer.MillisecondsRemaining <= _timer.GameStartTimeMilliseconds * PANIC_TIME_FRACTION;
+    }
+
 }
