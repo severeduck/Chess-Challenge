@@ -6,9 +6,9 @@
     public class MyBot : IChessBot
     {
         // Constants
-        private const int MAX_SEARCH_DEPTH = 2;
-        private const int MAX_SEARCH_MATE_DEPTH = 1;
-        private const double PANIC_TIME_FRACTION = 0.33;  // Once only 33% of the original time remains, enter panic mode
+        private const int MAX_SEARCH_DEPTH = 6;
+        private const int MAX_SEARCH_MATE_DEPTH = 3;
+        private const double PANIC_TIME_FRACTION = 0.25;  // Once only 33% of the original time remains, enter panic mode
 
         // Fields
         private Timer _timer;
