@@ -10,17 +10,12 @@ public class MyBot : IChessBot
     const double PANIC_FRACTION = 0.15;
     Timer t;
 
-    public Move Think(Board b, Timer timer)
+    public Move Think(Board b, ChessChallenge.API.Timer timer)
     {
         t = timer;
 
         var moves = b.GetLegalMoves().ToList();
         if (!moves.Any()) return default;
-
-        if (b.GameMoveHistory.Length == 0)
-        {
-            return new Move("d2d4", b);
-        }
 
         moves = moves.OrderByDescending(m => m.IsCapture)
                      .ThenByDescending(m => VictimValue(m.CapturePieceType) - AttackerValue(m.MovePieceType))
@@ -138,7 +133,7 @@ public class MyBot : IChessBot
 
     int DistanceToCenter(Square s) => Math.Abs(4 - s.File) + Math.Abs(4 - s.Rank);
 
-    int DynamicDepth(Board b, Timer t)
+    int DynamicDepth(Board b, ChessChallenge.API.Timer t)
     {
         double estMoves = (t.GameStartTimeMilliseconds - t.MillisecondsElapsedThisTurn) / (double)t.MillisecondsElapsedThisTurn;
         double avgTime = t.MillisecondsRemaining / estMoves;
