@@ -6,13 +6,12 @@
     public class MyBot : IChessBot
     {
         // Constants
-        private const int MAX_SEARCH_DEPTH = 7;
-        private const int MAX_SEARCH_MATE_DEPTH = 4;
+        private const int MAX_SEARCH_DEPTH = 2;
+        private const int MAX_SEARCH_MATE_DEPTH = 1;
         private const double PANIC_TIME_FRACTION = 0.33;  // Once only 33% of the original time remains, enter panic mode
 
         // Fields
         private Timer _timer;
-        private static readonly Dictionary<Move, int> moveHistory = new Dictionary<Move, int>();
 
         public Move Think(Board board, Timer timer)
         {
@@ -41,7 +40,7 @@
             Move bestMove = legalMoves.First();
             DateTime startTime = DateTime.Now;
 
-            double timeFraction = IsInPanicMode() ? 0.1 : 0.2;
+            double timeFraction = IsInPanicMode() ? 0.01 : 0.02;
             double timeForThisMove = _timer.MillisecondsRemaining * timeFraction;
 
             while ((DateTime.Now - startTime).TotalMilliseconds + 50 < timeForThisMove && depth <= MAX_SEARCH_DEPTH)
@@ -62,7 +61,6 @@
         {
             return moves.OrderByDescending(move => move.IsCapture)
                         .ThenByDescending(move => MVVLVA(move))
-                        .ThenByDescending(move => MoveHistoryScore(move))
                         .ToList();
         }
 
@@ -162,11 +160,6 @@
                 PieceType.Queen => 9,
                 _ => 0
             };
-        }
-
-        private int MoveHistoryScore(Move move)
-        {
-            return moveHistory.TryGetValue(move, out int score) ? score : 0;
         }
 
         private double AlphaBeta(Board board, int depth, double alpha, double beta)
