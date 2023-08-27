@@ -8,7 +8,7 @@
         // Constants
         private const int MAX_SEARCH_DEPTH = 6;
         private const int MAX_SEARCH_MATE_DEPTH = 3;
-        private const double PANIC_TIME_FRACTION = 0.25;  // Once only 33% of the original time remains, enter panic mode
+        private const double PANIC_TIME_FRACTION = 0.15;  // Once only 33% of the original time remains, enter panic mode
 
         // Fields
         private Timer _timer;
